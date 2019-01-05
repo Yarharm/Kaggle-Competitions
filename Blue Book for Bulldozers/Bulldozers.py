@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.impute import SimpleImputer
 from datetime import datetime
 
 # Competition description:
@@ -10,7 +9,7 @@ from datetime import datetime
 
 
 # get DataFrame
-df = pd.read_csv('Train.csv', low_memory=False, parse_dates=["saledate"])
+df = pd.read_csv('Train_small.csv', low_memory=False, parse_dates=["saledate"])
 
 # adjust SalePrice for the RMSLE
 df.SalePrice = np.log(df.SalePrice)
@@ -29,6 +28,8 @@ df['day_of_week'] = df['saledate'].map(day_of_week)
 df['month'] = df['saledate'].map(month)
 df['week_number'] = df['saledate'].map(week_number)
 df['week_number'] = df['week_number'].astype('int64')
+
+# drop columns full of NaN
 df.drop(['saledate', 'Steering_Controls', 'Differential_Type', 'Hydraulics_Flow', 'Grouser_Tracks', 'Coupler_System', 'Coupler',
          'Ride_Control', 'Forks', 'Enclosure', 'ProductGroupDesc', 'ProductGroup', 'state', 'fiProductClassDesc', 'ProductSize'], axis=1, inplace=True)
 
@@ -50,6 +51,8 @@ m = RandomForestRegressor(n_jobs=-1)
 y = df.SalePrice
 X = df.drop('SalePrice', axis=1)
 m.fit(X, y)
+
+# get R^2 of the prediction
 print(m.score(X,y))
 
 #print(df['saledate'].dtype)
