@@ -1,4 +1,5 @@
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
 import pandas as pd
 import numpy as np
 import re
@@ -90,15 +91,22 @@ df = df.apply(pd.to_numeric, errors='coerce', axis=1)
 # TRAINING
 X_train = df.iloc[:891, :]
 X_test = df.iloc[891:, :]
-m = RandomForestClassifier(n_estimators=60,
-                           n_jobs=-1,
-                           random_state=1,
-                           criterion='gini',
-                           max_depth=8,
-                           max_features='auto')
-m = m.fit(X_train,y_train)
-print('Score on training set: %.3f' % m.score(X_train, y_train))
-predicted = m.predict(X_test)
+m = RandomForestClassifier(random_state=1)
+
+param_grid = [{'n_estimators': [60,80,100,140,200],
+               'max_features': ['auto', 'sqrt', 'log2'],
+               'max_depth': [7,8,9,10],
+               'criterion': ['gini', 'entropy']}]
+
+gs = GridSearchCV(estimator=m,
+                  param_grid=param_grid,
+                  scoring='accuracy',
+                  cv=10,
+                  n_jobs=-1)
+gs = gs.fit(X_train, y_train)
+print('Score on training set: %.3f' % gs.best_score_)
+print(gs.best_params_)
+predicted = gs.predict(X_test)
 result = pd.DataFrame({'PassengerId': X_test['PassengerId'],
                        'Survived': predicted})
 result['PassengerId'] = result['PassengerId'].astype('Int32')
