@@ -96,3 +96,60 @@ def corr_map(train_data):
 # corr_map(train)
 
 # Impute missing values
+data['PoolQC'].fillna('None', inplace=True)
+data['MiscFeature'].fillna('None', inplace=True)
+data['Alley'].fillna('None', inplace=True)
+data['Fence'].fillna('None', inplace=True)
+data['FireplaceQu'].fillna('None', inplace=True)
+
+# LogFrontage is similar in the median of all neighbourhoods
+data['LotFrontage'] = data.groupby('Neighborhood')['LotFrontage'].transform(
+                                   lambda x: x.fillna(x.median()))
+
+# Garage
+for col in ('GarageType', 'GarageFinish',
+            'GarageQual', 'GarageCond'):
+    data[col].fillna('None', inplace=True)
+# 0 cars in Garage that do not exists
+for col in ('GarageYrBlt', 'GarageArea',
+            'GarageCars'):
+    data[col].fillna(0, inplace=True)
+
+# Basement
+for col in ('BsmtFinSF1', 'BsmtFinSF2',
+            'BsmtUnfSF','TotalBsmtSF',
+            'BsmtFullBath', 'BsmtHalfBath'):
+    data[col].fillna(0, inplace=True)
+for col in ('BsmtQual', 'BsmtCond',
+            'BsmtExposure', 'BsmtFinType1',
+            'BsmtFinType2'):
+    data[col].fillna('None', inplace=True)
+
+# Masonry
+data['MasVnrType'].fillna('None', inplace=True)
+data['MasVnrArea'].fillna(0, inplace=True)
+
+# General zoning
+data['MSZoning'].fillna(data['MSZoning'].mode()[0], inplace=True)
+
+# Utilities can be removed
+data.drop(['Utilities'], axis=1, inplace=True)
+
+# Functional (NA => Typ)
+data['Functional'].fillna('Typ', inplace=True)
+
+# Electrical
+data['Electrical'].fillna(data['Electrical'].mode()[0], inplace=True)
+
+# Kitched quality
+data['KitchenQual'].fillna(data['KitchenQual'].mode()[0], inplace=True)
+
+# Exterior
+data['Exterior1st'].fillna(data['Exterior1st'].mode()[0], inplace=True)
+data['Exterior2nd'].fillna(data['Exterior2nd'].mode()[0], inplace=True)
+
+# SaleType
+data['SaleType'].fillna(data['SaleType'].mode()[0], inplace=True)
+
+# BuildingClass
+data['MSSubClass'].fillna('None', inplace=True)
