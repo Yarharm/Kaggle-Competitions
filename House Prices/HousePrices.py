@@ -62,6 +62,37 @@ train['SalePrice'] = np.log1p(train['SalePrice'])
 # target_analysis(train)
 
 # FEATURE ENGINEERING
+# Concat Train and Test
+ntrain = train.shape[0]
+ntest = test.shape[0]
+y_train = train['SalePrice'].values
+data = pd.concat((train, test), sort=False).reset_index(drop=True)
+data.drop(['SalePrice'], axis=1, inplace=True)
 
+# Analyse missing data
+def percent_missing_data_by_feature(data):
+    # Missing data for the first 30 features
+    data_na = (data.isna().sum() / len(data)) * 100
+    data_na = data_na.drop(data_na[data_na == 0].index).sort_values(ascending=False)[:30]
 
+    # Graph most missing columns
+    f, ax = plt.subplots(figsize=(15, 12))
+    plt.xticks(rotation='90')  # rotate labels on x-axis
+    sns.barplot(x=data_na.index, y=data_na)
+    plt.xlabel('Features', fontsize=15)
+    plt.ylabel('Percent of missing values', fontsize=15)
+    plt.title('Percent missing data by feature', fontsize=15)
+    plt.show()
+    return
+# percent_missing_data_by_feature(data)
 
+# Data Correlation analysis
+def corr_map(train_data):
+    corrmat = train_data.corr()
+    plt.subplots(figsize=(12,9))
+    sns.heatmap(corrmat, vmax=0.9, square=True)
+    plt.show()
+    return
+# corr_map(train)
+
+# Impute missing values
