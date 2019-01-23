@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.preprocessing import LabelEncoder
 from scipy import stats
-from scipy.stats import norm, skew
+from scipy.stats import norm
 
 train = pd.read_csv('train.csv', low_memory=False)
 test = pd.read_csv('test.csv', low_memory=False)
@@ -153,3 +154,27 @@ data['SaleType'].fillna(data['SaleType'].mode()[0], inplace=True)
 
 # BuildingClass
 data['MSSubClass'].fillna('None', inplace=True)
+
+#/////////////////////////////////////////
+data['MSSubClass'] = data['MSSubClass'].apply(str)
+data['OverallCond'] = data['OverallCond'].astype(str)
+data['YrSold'] = data['YrSold'].astype(str)
+data['MoSold'] = data['MoSold'].astype(str)
+#/////////////////////////////////////////
+# Try label encoding insted of get_dummies
+cols = ('FireplaceQu', 'BsmtQual', 'BsmtCond',
+        'GarageQual', 'GarageCond', 'ExterQual',
+        'ExterCond','HeatingQC', 'PoolQC', 'KitchenQual',
+        'BsmtFinType1', 'BsmtFinType2', 'Functional', 'Fence',
+        'BsmtExposure', 'GarageFinish', 'LandSlope', 'LotShape',
+        'PavedDrive', 'Street', 'Alley', 'CentralAir', 'MSSubClass',
+        'OverallCond', 'YrSold', 'MoSold')
+for c in cols:
+    lbl = LabelEncoder()
+    lbl.fit(list(data[c].values))
+    data[c] = lbl.transform(data[c].values)
+
+# Add total house area feature
+data['TotalSF'] = data['TotalBsmSF'] + data['1stFlrSF'] + data['2ndFlrSF']
+
+# Verify all scewed features
