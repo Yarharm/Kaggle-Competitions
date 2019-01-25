@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
 from scipy import stats
-from scipy.stats import norm
+from scipy.stats import norm, skew
+from scipy.special import boxcox1p
 
 train = pd.read_csv('train.csv', low_memory=False)
 test = pd.read_csv('test.csv', low_memory=False)
@@ -19,6 +20,11 @@ test.drop('Id', axis=1, inplace=True)
 
 # Identify outliers
 def outlier(train):
+    """
+    Identify extreme outliers in any feature (Ex Ground Living Area)
+    :param train: training DataFrane
+    :return:
+    """
     fig, ax = plt.subplots()
     ax.scatter(x=train['GrLivArea'],
                y=train['SalePrice'],
@@ -38,6 +44,11 @@ train.drop(train[(train['GrLivArea']>4000) &
 
 # Target variable analysis
 def target_analysis(train):
+    """
+    Identify how skewed targer feature is
+    :param train: training DataFrame
+    :return: Normal distribution and QQ plot
+    """
     sns.distplot(train['SalePrice'], fit=norm)
 
 # Fitted parameters of the function
@@ -72,6 +83,11 @@ data.drop(['SalePrice'], axis=1, inplace=True)
 
 # Analyse missing data
 def percent_missing_data_by_feature(data):
+    """
+    Percentage of missing data in each feature
+    :param data: training DaraFrame
+    :return: barplot
+    """
     # Missing data for the first 30 features
     data_na = (data.isna().sum() / len(data)) * 100
     data_na = data_na.drop(data_na[data_na == 0].index).sort_values(ascending=False)[:30]
@@ -89,6 +105,11 @@ def percent_missing_data_by_feature(data):
 
 # Data Correlation analysis
 def corr_map(train_data):
+    """
+    Get correlation map
+    :param train_data: training DataFrame
+    :return: heatmap plot
+    """
     corrmat = train_data.corr()
     plt.subplots(figsize=(12,9))
     sns.heatmap(corrmat, vmax=0.9, square=True)
@@ -161,7 +182,7 @@ data['OverallCond'] = data['OverallCond'].astype(str)
 data['YrSold'] = data['YrSold'].astype(str)
 data['MoSold'] = data['MoSold'].astype(str)
 #/////////////////////////////////////////
-# Try label encoding insted of get_dummies
+# Label encode ordinal features
 cols = ('FireplaceQu', 'BsmtQual', 'BsmtCond',
         'GarageQual', 'GarageCond', 'ExterQual',
         'ExterCond','HeatingQC', 'PoolQC', 'KitchenQual',
@@ -175,6 +196,22 @@ for c in cols:
     data[c] = lbl.transform(data[c].values)
 
 # Add total house area feature
-data['TotalSF'] = data['TotalBsmSF'] + data['1stFlrSF'] + data['2ndFlrSF']
+data['TotalSF'] = data['TotalBsmtSF'] + data['1stFlrSF'] + data['2ndFlrSF']
 
-# Verify all scewed features
+# VERIFY SKEWED FEATURES
+# get all non-string features
+numeric_featrs = data.dtypes[data.dtypes != 'object'].index
+skewed_featrs = data[numeric_featrs].apply(lambda x: skew(x)).sort_values(ascending=False)
+# Transform to DataFrame
+skewness = pd.DataFrame({'Skew': skewed_featrs})
+
+# Transorm highly skewed data with Box-Cox transormation
+# Box-Cox applies log-transormation for lmbda = 0
+skewness = skewness[abs(skewness) > 0.75]  # Highly skewed for the deviation of 0.75+
+for feature in skewness.index:
+    data[feature] = boxcox1p(data[feature], 0.15)
+
+# Transform the rest of the nominal features
+data = pd.get_dummies(data)
+
+# MODELING
