@@ -16,8 +16,6 @@ from sklearn.preprocessing import RobustScaler
 from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin, clone
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
 from sklearn.metrics import mean_squared_error
-import xgboost as xgb
-import lightgbm as lgb
 
 train = pd.read_csv('train.csv', low_memory=False)
 test = pd.read_csv('test.csv', low_memory=False)
@@ -225,14 +223,15 @@ for feature in skewness.index:
 
 # Transform the rest of the nominal features
 data = pd.get_dummies(data)
-
+train = data[:ntrain]
+test = data[ntest:]
 # MODELING
 # Cross valiation strategy
 n_folds = 5  # For relatively small dataset decrease from 10 to 5
 
 # Cross_val_score does not shuffle data
 def rmsle_cv(model):
-    kf = KFold(n_folds, shuffle=True, random_state=42).get_n_splits(train.values)  # Non-stratified
+    kf = KFold(n_folds, shuffle=True, random_state=1).get_n_splits(train.values)  # Non-stratified
     rmse = np.sqrt(-cross_val_score(model, train.values, y_train, scoring="neg_mean_squared_error", cv=kf))
     return(rmse)
 
@@ -242,3 +241,59 @@ ENet = make_pipeline(RobustScaler(), ElasticNet(alpha=0.0005, l1_ratio=0.9, rand
 
 # Kernel Ridge
 KRR = KernelRidge(alpha=0.6, kernel='polynomial', degree=2, coef0=2.5)
+
+# Gradient boost with 'huber' for robustness
+GBoost = GradientBoostingRegressor(n_estimators=3000, learning_rate=0.05,
+                                   max_depth=4, max_features='sqrt',
+                                   min_samples_leaf=15, min_samples_split=10,
+                                   loss='huber', random_state=1)
+
+# Evaluate LASSO, ENet, KRR and GBoost
+score = rmsle_cv(lasso)
+print('Lasso score: %.4f' % score.mean())
+
+score = rmsle_cv(ENet)
+print('ENet score: %.4f' % score.mean())
+
+score = rmsle_cv(KRR)
+print('KRR score: %.4f' % score.mean())
+
+score = rmsle_cv(GBoost)
+print('GBoost score: %.4f' % score.mean())
+
+# Simple Stacking class
+class StackedModels(BaseEstimator, RegressorMixin, TransformerMixin):
+    """
+    Exploting stacking as a part of Ensemble technique
+    Ensemble (Boosting, Bagging, Stacking)
+    """
+    def __init__(self, models):
+        self.models = models
+        return None
+
+    def fit(self, X, y):
+        """
+        Fit data in clones (self.models_) of the original models
+        :param X: array-like {n_records, n_features) training data
+        :param y: array {n_records} target data
+        :return: reference to the object on which it was called
+        """
+        self.models_ = [clone(x) for x in self.models]
+        for model in self.models_:
+            model.fit(X, y)
+        return self
+
+    def predict(self, X):
+        """
+        Average predictions on the cloned models
+        :param X: array-like {n_records, n_features) training data
+        :return:
+        """
+        predictions = np.column_stack([model.predict(X) for model in self.models_])
+       # print('Shape of the predictions inside predict call %.4f' % predictions.shape)
+        return np.mean(predictions, axis=1)  #mean of each row
+
+averaged_models = StackedModels(models = (ENet, GBoost,
+                                            KRR, lasso))
+score = rmsle_cv(averaged_models)
+print('Averaged models score %.4f' % score.mean())
