@@ -3,3 +3,5 @@ Set of competitions for ML and DL from https://www.kaggle.com/
 
 1) [Titanic](https://www.kaggle.com/c/titanic).
 2) [Blue Book for Bulldozers](https://www.kaggle.com/c/bluebook-for-bulldozers).
+3) [House Prices](https://www.kaggle.com/c/house-prices-advanced-regression-techniques/leaderboard)
+3.1 To Do: Instead of stacking, test XGBoost(RandomForest)/LightGBM.

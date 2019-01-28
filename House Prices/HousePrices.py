@@ -3,19 +3,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
-from scipy import stats
 from scipy.stats import norm, skew
 from scipy.special import boxcox1p
 
 # Models in test
-from sklearn.linear_model import ElasticNet, Lasso,  BayesianRidge, LassoLarsIC
-from sklearn.ensemble import RandomForestRegressor,  GradientBoostingRegressor
+from sklearn.linear_model import ElasticNet, Lasso
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import RobustScaler
 from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin, clone
-from sklearn.model_selection import KFold, cross_val_score, train_test_split
-from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold, cross_val_score
 
 train = pd.read_csv('train.csv', low_memory=False)
 test = pd.read_csv('test.csv', low_memory=False)
@@ -27,6 +25,7 @@ test_ID = test['Id']
 # Drop 'Id' column
 train.drop('Id', axis=1, inplace=True)
 test.drop('Id', axis=1, inplace=True)
+
 
 # Identify outliers
 def outlier(train):
@@ -44,39 +43,40 @@ def outlier(train):
     plt.show()
     return
 
-#outlier(train)
+
+# outlier(train)
 
 # Delete extreme outliers
-train.drop(train[(train['GrLivArea']>4000) &
-                 (train['SalePrice']<300000)].index,
+train.drop(train[(train['GrLivArea'] > 4000) &
+                 (train['SalePrice'] < 300000)].index,
            inplace=True)
-#outlier(train)
+
+
+# outlier(train)
 
 # Target variable analysis
 def target_analysis(train):
     """
     Identify how skewed targer feature is
     :param train: training DataFrame
-    :return: Normal distribution and QQ plot
+    :return: Normal distribution
     """
     sns.distplot(train['SalePrice'], fit=norm)
 
-# Fitted parameters of the function
+    # Fitted parameters of the function
     (mu, sigma) = norm.fit(train['SalePrice'])
 
-# Plot the distribution
-# Place legend on the axis
+    # Plot the distribution
+    # Place legend on the axis
     plt.legend(['Normal dist. ($\mu=$ {:.2f} and'
                 '$\sigma=$ {:.2f})'.format(mu, sigma)],
-                loc='best')
+               loc='best')
     plt.title('SalePrice distribution')
     plt.ylabel('Frequency')
-
-# Get quantile-quantile plot
-    fig = plt.figure()
-    res = stats.probplot(train['SalePrice'], plot=plt)
     plt.show()
     return
+
+
 # TARGET VARIABLE IS RIGHT SKEWED.
 # Transfrom to normally distributed using Log-transformation
 # Log-transformation deals with skewed data
@@ -111,6 +111,8 @@ def percent_missing_data_by_feature(data):
     plt.title('Percent missing data by feature', fontsize=15)
     plt.show()
     return
+
+
 # percent_missing_data_by_feature(data)
 
 # Data Correlation analysis
@@ -121,10 +123,12 @@ def corr_map(train_data):
     :return: heatmap plot
     """
     corrmat = train_data.corr()
-    plt.subplots(figsize=(12,9))
+    plt.subplots(figsize=(12, 9))
     sns.heatmap(corrmat, vmax=0.9, square=True)
     plt.show()
     return
+
+
 # corr_map(train)
 
 # Impute missing values
@@ -136,7 +140,7 @@ data['FireplaceQu'].fillna('None', inplace=True)
 
 # LogFrontage is similar in the median of all neighbourhoods
 data['LotFrontage'] = data.groupby('Neighborhood')['LotFrontage'].transform(
-                                   lambda x: x.fillna(x.median()))
+    lambda x: x.fillna(x.median()))
 
 # Garage
 for col in ('GarageType', 'GarageFinish',
@@ -149,7 +153,7 @@ for col in ('GarageYrBlt', 'GarageArea',
 
 # Basement
 for col in ('BsmtFinSF1', 'BsmtFinSF2',
-            'BsmtUnfSF','TotalBsmtSF',
+            'BsmtUnfSF', 'TotalBsmtSF',
             'BsmtFullBath', 'BsmtHalfBath'):
     data[col].fillna(0, inplace=True)
 for col in ('BsmtQual', 'BsmtCond',
@@ -186,16 +190,16 @@ data['SaleType'].fillna(data['SaleType'].mode()[0], inplace=True)
 # BuildingClass
 data['MSSubClass'].fillna('None', inplace=True)
 
-#/////////////////////////////////////////
-data['MSSubClass'] = data['MSSubClass'].apply(str)
+# /////////////////////////////////////////
+data['MSSubClass'] = data['MSSubClass'].astype(str)
 data['OverallCond'] = data['OverallCond'].astype(str)
 data['YrSold'] = data['YrSold'].astype(str)
 data['MoSold'] = data['MoSold'].astype(str)
-#/////////////////////////////////////////
+# /////////////////////////////////////////
 # Label encode ordinal features
 cols = ('FireplaceQu', 'BsmtQual', 'BsmtCond',
         'GarageQual', 'GarageCond', 'ExterQual',
-        'ExterCond','HeatingQC', 'PoolQC', 'KitchenQual',
+        'ExterCond', 'HeatingQC', 'PoolQC', 'KitchenQual',
         'BsmtFinType1', 'BsmtFinType2', 'Functional', 'Fence',
         'BsmtExposure', 'GarageFinish', 'LandSlope', 'LotShape',
         'PavedDrive', 'Street', 'Alley', 'CentralAir', 'MSSubClass',
@@ -224,16 +228,19 @@ for feature in skewness.index:
 # Transform the rest of the nominal features
 data = pd.get_dummies(data)
 train = data[:ntrain]
-test = data[ntest:]
+test = data[ntrain:]
+
 # MODELING
 # Cross valiation strategy
 n_folds = 5  # For relatively small dataset decrease from 10 to 5
+
 
 # Cross_val_score does not shuffle data
 def rmsle_cv(model):
     kf = KFold(n_folds, shuffle=True, random_state=1).get_n_splits(train.values)  # Non-stratified
     rmse = np.sqrt(-cross_val_score(model, train.values, y_train, scoring="neg_mean_squared_error", cv=kf))
-    return(rmse)
+    return (rmse)
+
 
 # LASSO and Elastic Net regressions => sensitive towards outliers (Apply RobustScaler())
 lasso = make_pipeline(RobustScaler(), Lasso(alpha=0.0005, random_state=1))
@@ -242,31 +249,33 @@ ENet = make_pipeline(RobustScaler(), ElasticNet(alpha=0.0005, l1_ratio=0.9, rand
 # Kernel Ridge
 KRR = KernelRidge(alpha=0.6, kernel='polynomial', degree=2, coef0=2.5)
 
-# Gradient boost with 'huber' for robustness
+# Gradient boost with 'huber' for robustness => (Requires GridSearch polishing)
 GBoost = GradientBoostingRegressor(n_estimators=3000, learning_rate=0.05,
                                    max_depth=4, max_features='sqrt',
                                    min_samples_leaf=15, min_samples_split=10,
                                    loss='huber', random_state=1)
 
 # Evaluate LASSO, ENet, KRR and GBoost
-score = rmsle_cv(lasso)
-print('Lasso score: %.4f' % score.mean())
+#score = rmsle_cv(lasso)
+#print('Lasso score: %.4f' % score.mean())
 
-score = rmsle_cv(ENet)
-print('ENet score: %.4f' % score.mean())
+#score = rmsle_cv(ENet)
+#print('ENet score: %.4f' % score.mean())
 
-score = rmsle_cv(KRR)
-print('KRR score: %.4f' % score.mean())
+#score = rmsle_cv(KRR)
+#print('KRR score: %.4f' % score.mean())
 
-score = rmsle_cv(GBoost)
-print('GBoost score: %.4f' % score.mean())
+#score = rmsle_cv(GBoost)
+#print('GBoost score: %.4f' % score.mean())
+
 
 # Simple Stacking class
-class StackedModels(BaseEstimator, RegressorMixin, TransformerMixin):
+class StackedModels():
     """
     Exploting stacking as a part of Ensemble technique
     Ensemble (Boosting, Bagging, Stacking)
     """
+
     def __init__(self, models):
         self.models = models
         return None
@@ -290,10 +299,68 @@ class StackedModels(BaseEstimator, RegressorMixin, TransformerMixin):
         :return:
         """
         predictions = np.column_stack([model.predict(X) for model in self.models_])
-       # print('Shape of the predictions inside predict call %.4f' % predictions.shape)
-        return np.mean(predictions, axis=1)  #mean of each row
+        # print('Shape of the predictions inside predict call %.4f' % predictions.shape)
+        return np.mean(predictions, axis=1)  # mean of each row
 
-averaged_models = StackedModels(models = (ENet, GBoost,
-                                            KRR, lasso))
-score = rmsle_cv(averaged_models)
-print('Averaged models score %.4f' % score.mean())
+
+averaged_models = StackedModels(models=(ENet, GBoost,
+                                        KRR, lasso))
+#score = rmsle_cv(averaged_models)
+#print('Averaged models score %.4f' % score.mean())
+
+# Meta-model Stacking class
+class StackedMetaModel():
+    """
+    Fit part:
+    Meta model is trained on out-of-folds predictions.
+    Out-of-folds predictions contain predictions of base models on each fold.
+    Folds are obtained by KFold.
+    Predict part:
+    Predictions of the base models are averaged and fed to the meta model,
+    which yeilds final prediction.
+    """
+    def __init__(self, base_models, meta_model, n_folds=5):
+        self.base_models = base_models
+        self.meta_model = meta_model
+        self.n_folds = n_folds
+        return None
+
+    def fit(self, X, y):
+        self.base_models_ = [list() for x in self.base_models]
+        self.meta_model_ = clone(self.meta_model)
+        kfold = KFold(n_splits=self.n_folds,
+                      shuffle=True,
+                      random_state=1)
+        out_of_fold_predictions = np.zeros((X.shape[0],  # predictions of the base models
+                                            len(self.base_models)))
+        for i, model in enumerate(self.base_models):
+            for train_index, holdout_index in kfold.split(X, y):
+                instance = clone(model)
+                self.base_models_[i].append(instance)
+                instance.fit(X[train_index], y[train_index])
+                y_pred = instance.predict(X[holdout_index])
+                out_of_fold_predictions[holdout_index, i] = y_pred
+        # Train cloned meta-model
+        self.meta_model_.fit(out_of_fold_predictions, y)
+        return self
+
+    def predict(self, X):
+        meta_features = np.column_stack([np.column_stack([model.predict(X)
+                                                          for model in base_models]).mean(axis=1)
+                                         for base_models in self.base_models_])
+        return self.meta_model_.predict(meta_features)
+
+
+stacked_meta_model = StackedMetaModel(base_models=(ENet, GBoost, KRR),
+                                      meta_model=lasso,
+                                      n_folds=5)
+#score = rmsle_cv(stacked_meta_model)
+#print('Stacked meta model score: %.4f' % score.mean())
+
+# Using simple base models does not yeild a big
+# Submission
+sub = pd.DataFrame()
+stacked_meta_model.fit(train.values, y_train)
+sub['Id'] = test_ID
+sub['SalePrice'] = np.expm1(stacked_meta_model.predict(test.values))
+sub.to_csv('house_sub.csv', index=False)
