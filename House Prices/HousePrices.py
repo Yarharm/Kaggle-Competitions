@@ -357,10 +357,10 @@ stacked_meta_model = StackedMetaModel(base_models=(ENet, GBoost, KRR),
 #score = rmsle_cv(stacked_meta_model)
 #print('Stacked meta model score: %.4f' % score.mean())
 
-# Using simple base models does not yeild a big
+# Using simple base models does not yeild a big change
 # Submission
 sub = pd.DataFrame()
 stacked_meta_model.fit(train.values, y_train)
 sub['Id'] = test_ID
 sub['SalePrice'] = np.expm1(stacked_meta_model.predict(test.values))
-sub.to_csv('house_sub.csv', index=False)
+sub.to_csv('submission.csv', index=False)
