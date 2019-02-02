@@ -1,115 +1,101 @@
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
 import pandas as pd
 import numpy as np
-import re
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import LabelEncoder
+
+# Get data
+train_data = pd.read_csv('train.csv', low_memory=False)
+test_data = pd.read_csv('test.csv', low_memory=False)
+
+PassengerId = test_data['PassengerId']  # for future submission
 
 
-train = pd.read_csv('train.csv', low_memory=False)
-y_train = train['Survived']
-df = pd.read_csv('data.csv', low_memory=False)
-# Encode Sex column (Nominal feature => OneHotEncoding)
-convert_sex = pd.get_dummies(df['Sex'], drop_first=True)
-df = df.join(convert_sex)
-# Embarked column
-df['Embarked'] = df['Embarked'].fillna('S')
-convert_embarked = pd.get_dummies(df['Embarked'])
-df = df.join(convert_embarked)
+## STEP 1: DETECT OUTLIERS
+# Analyse effect of outliers on the outcome
+#def detect_outliers(df, n, features):
+#    outliers = []
+#    for col in features:
+#        pass
 
-# Title is the only relevant info in Name column
-def find_titles(title):
-    return re.search(',\s{1}(.*?)\.', title).group()[2:-1]
-df['Name'] = df['Name'].apply(find_titles)
-df['Name'].replace(to_replace='^(?!(Mr|Miss|Mrs|Master)$).*',
-                   value='Other', inplace=True, regex=True)
-convert_title = pd.get_dummies(df['Name'])
-df = df.join(convert_title)
-# Convert cabin
-def cabin_to_deck(cab):
-    """ Convert cabinet to the floor where Cabinet is located.
-    The idea is that the floor should affect chances of survival
-    Passengers without the Cabinet are in new group U => Unknown
-    :param cab: string
-        Cabinet with the floor and number
-    :return: string
-        Chop number part of the cabinet and return only it's floor
-    """
-    return re.search('^.{1}', cab).group()
 
-df['Cabin'].fillna("Unknown", inplace=True)
-df['Cabin'] = df['Cabin'].apply(cabin_to_deck)
-# Floor order
-deck = {'A': 0, 'B': 1, 'C': 2,
-        'D': 3, 'E': 4, 'F': 5,
-        'G': 6, 'T': 7, 'U': 8}
-df['Cabin'] = df['Cabin'].map(deck)
-
-# Impute missing Age values
-#temp_df = df.copy()
-#temp_df.dropna(inplace=True, subset=['Age'])
-#mean_ = int(temp_df['Age'].median())  # Median
-#df.fillna(mean_, inplace=True)
-#df['Age'] = df['Age'].astype('int64')
-
-index_NaN_age = list(df["Age"][df["Age"].isnull()].index)
-
-for i in index_NaN_age :
-    age_med = df["Age"].median()
-    age_pred = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"])
-                          & (df['Parch'] == df.iloc[i]["Parch"])
-                          & (df['Pclass'] == df.iloc[i]["Pclass"]))].median()
-    if not np.isnan(age_pred) :
-        df['Age'].iloc[i] = age_pred
-    else :
-        df['Age'].iloc[i] = age_med
-
-# Identify family sizes
-df['FamilySize'] = df['SibSp'] + df['Parch'] + 1
-# Split family sizes
-df['Single'] = df['FamilySize'].map(lambda s: 1 if s == 1 else 0)
-df['SmallF'] = df['FamilySize'].map(lambda s: 1 if s == 2 else 0)
-df['MedF'] = df['FamilySize'].map(lambda s: 1 if 3 <= s <= 4 else 0)
-df['LargeF'] = df['FamilySize'].map(lambda s: 1 if s >= 5 else 0)
-
-# Map Fare
-def map_fare(price):
-    if price <= 8:
-        return 0.0
-    elif price > 8 and price <= 15:
-        return 1.0
-    elif price > 15 and price <= 31:
-        return 2.0
+# STEP 2: Correlation analysis
+def relation_graphs(data, heatmap_features=None):
+    # Heatmap
+    if heatmap_features is None:
+        heatmap = sns.heatmap(data.corr(), annot=True,
+                              fmt=".2f", cmap='coolwarm')
     else:
-        return 3.0
-df['Fare'] = df['Fare'].apply(map_fare)
-# List of dropped columns
-drop_list = ['Sex', 'Embarked',
-             'SibSp', 'Parch',
-             'Ticket', 'Name']
-df.drop(drop_list, inplace=True, axis=1)
-df = df.apply(pd.to_numeric, errors='coerce', axis=1)
-# TRAINING
-X_train = df.iloc[:891, :]
-X_test = df.iloc[891:, :]
-m = RandomForestClassifier(random_state=1)
+        heatmap = sns.heatmap(data[heatmap_features].corr(),
+                              annot=True, fmt=".2f",
+                              cmap='coolwarm')
+    # Barplot [SibSP vs Survived]
+    factor_SibSp = sns.factorplot(x='SibSp', y='Survived',
+                                  data=data, kind='bar',
+                                  size=5, palette='muted')\
+        .set_ylabels('Survival probab')
+    # Barplot [Parch vs Survived]
+    factor_Parch = sns.factorplot(x='Parch', y='Survived',
+                                  data=data, kind='bar',
+                                  size=5, palette='muted')\
+        .set_ylabels('Survival probab')
+    # FacetGrid [Age vs Survived]
+    facet_Age = sns.FacetGrid(data, col='Survived').map(sns.distplot, 'Age')
 
-param_grid = [{'n_estimators': [60,80,100,140,200],
-               'max_features': ['auto', 'sqrt', 'log2'],
-               'max_depth': [7,8,9,10],
-               'criterion': ['gini', 'entropy']}]
+    # Barplot [Sex vs Survived]
+    barplot_sex = sns.barplot(x='Sex', y='Survived',
+                              data=data).set_ylabel('Survival Probab')
 
-gs = GridSearchCV(estimator=m,
-                  param_grid=param_grid,
-                  scoring='accuracy',
-                  cv=10,
-                  n_jobs=-1)
-gs = gs.fit(X_train, y_train)
-print('Score on training set: %.3f' % gs.best_score_)
-print(gs.best_params_)
-predicted = gs.predict(X_test)
-result = pd.DataFrame({'PassengerId': X_test['PassengerId'],
-                       'Survived': predicted})
-result['PassengerId'] = result['PassengerId'].astype('Int32')
-result['Survived'] = result['Survived'].astype('Int32')
-print(result.dtypes)
-result.to_csv('submission.csv', index=False)
+    # Barplot [Pclass vs Survived]
+    factor_Pcalss = sns.factorplot(x='Pclass', y='Survived',
+                                 data=data, kind='bar', size=5)\
+        .set_ylabels('survival prob')
+    plt.show()
+#relation_graphs(train_data)
+
+
+# STEP 3: Join two sets
+y_train = train_data['Survived'].values
+train_data.drop(['Survived'], axis=1, inplace=True)
+
+# Number of input values for train and test data
+train_len = train_data.shape[0]
+test_len = test_data.shape[0]
+
+# Get join DataFrame
+df = pd.concat(objs=[train_data, test_data], axis=0, sort='False').reset_index(drop=True)
+
+
+# STEP 4: Add missing values and transform skewed data
+# 'Fare' adjustment
+#print(df['Fare'].isna().sum())
+df['Fare'] = df['Fare'].fillna(df['Fare'].median())
+df['Fare'] = np.log1p(df['Fare'])
+
+# 'Embarked' adjustment
+#print(df['Embarked'].isna().sum())
+mode_embarked = df['Embarked'].mode()[0]  # most frequent in 'Embarked'
+df['Embarked'] = df['Embarked'].fillna(mode_embarked)
+
+# 'Sex' adjustment
+lbl = LabelEncoder()
+lbl.fit(list(df['Sex'].values))
+df['Sex'] = lbl.transform(df['Sex'].values)
+
+# 'Age' adjustment (263 missing values)
+# Age is heavily correlated with Pclass, Parch and SibSp
+# Apply meadian based on this correlation
+index_NaN_age = list(df["Age"][df["Age"].isnull()].index)  # index of all nan values
+
+#for i in index_NaN_age:
+#    age_med = df["Age"].median()
+#    age_pred = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) &
+#                          (df['Pclass'] == df.iloc[i]["Pclass"]))].median()
+
+#    if not np.isnan(age_pred):
+#        df['Age'].iloc[i] = age_pred
+#    else:
+#        df['Age'].iloc[i] = age_med
+#print(df['Age'].isna().sum())
+
+# 'Cabin' adjustment (1014 missing values)
