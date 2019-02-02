@@ -9,14 +9,14 @@ train_data = train_data.to_numpy('float32')
 X_train, y_train = train_data[:, 1:], train_data[:, 0]
 X_train = X_train / 255.0
 # Get validation set (12%)
-X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train,
-                                                      test_size=0.12, random_state=1)
+#X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train,
+#                                                      test_size=0.12, random_state=1)
 
 # Test data
 test_data = pd.read_csv('Kaggle_MNIST/test.csv', low_memory=True)
 X_test = test_data.to_numpy('float32')
 X_test = X_test / 255.0
-
+test_ID = [(x + 1) for x in range(X_test.shape[0])]
 #print(X_train.shape)
 #print(y_train.shape)
 #print(X_valid.shape)
@@ -27,21 +27,23 @@ X_test = X_test / 255.0
 mean_val = np.mean(X_train, axis=0)  # mean for each feature
 std_val = np.std(X_train)  # std for the whole set
 X_train_norm = (X_train - mean_val)/std_val
-X_valid_norm = (X_valid - mean_val)/std_val
+#X_valid_norm = (X_valid - mean_val)/std_val
 X_test_norm = (X_test - mean_val)/std_val
 
+del X_train, X_test
 # Mini-batches generator
 def batch_gen(X, y, batch_size=64,
               shuffle=False, random_seed=None):
-    index = np.arange(y.shape[0])  # [0 ... 10000)
+    index = np.arange(y.shape[0])
+
     if shuffle:
-        rng = np.random.RandomState(random_seed)
-        rng.shuffle(index)
-        X = X[index]
-        y = y[index]
+        data = np.column_stack((X, y))
+        np.random.shuffle(data)
+        X = data[:, :-1]
+        y = data[:, -1].astype(int)
 
     for i in range(0, X.shape[0], batch_size):
-        yield (X[i:i+batch_size, :], y[i:i+batch_size])
+        yield (X[i:i + batch_size, :], y[i:i + batch_size])
 
 # Low-Level API
 # Convolutional layer
@@ -61,15 +63,16 @@ def conv_layer(input_tensor, name,
     with tf.variable_scope(name):
         # input_tensor shape: {batch x width x height x channels}
         input_shape = input_tensor.get_shape().as_list()
-        n_input_channels = input_tensor[-1]
+        n_input_channels = input_shape[-1]
 
         # Kernel of shape [batch, in_height, in_width, in_channels]
         weights_shape = list(kernel_size) + \
             [n_input_channels, n_output_channels]
+
         # print(weights_shape)
 
         filter = tf.get_variable(name='_filter',
-                                  shape=weights_shape)  # Xavier by default
+                                 shape=weights_shape)  # Xavier by default
         # bias
         biases = tf.get_variable(name='_biases',
                                  initializer=tf.zeros(
@@ -99,6 +102,7 @@ def fc_layer(input_tensor, name,
 
         # Init weights
         weights_shape = [input_ftrs, output_units]
+
         weights = tf.get_variable(name='_weights', shape=weights_shape)
 
         # Bias
@@ -121,8 +125,10 @@ def fc_layer(input_tensor, name,
 # Build network
 def cnn(learning_rate=0.0001):
     ## Input data and labels
-    tf_x = tf.placeholder(tf.float32, shape=[None, 784], name='tf_x')
-    tf_y = tf.placeholder(tf.int32, shape=[None], name='tf_y')
+    tf_x = tf.placeholder(tf.float32, shape=[None, 784],
+                          name='tf_x')
+    tf_y = tf.placeholder(tf.int32, shape=[None],
+                          name='tf_y')
 
     # Reshape 784 features to the rank 4 tensor [bathc_size x 28 x 28 x 1]
     tf_x_image = tf.reshape(tf_x, shape=[-1, 28, 28, 1], name='tf_x_prop_shape')
@@ -183,15 +189,16 @@ def cnn(learning_rate=0.0001):
         name='cross_entropy_loss')
 
     # Optimization
-    optimizer =tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     optimizer = optimizer.minimize(cross_entropy_loss, name='train_op')
 
 # Train
-def train(session, training_set, validation_set=None,
+def train(session, X_train, y_train, validation_set=None,
           initialize=True, epochs=20, shuffle=True,
           dropout=0.4, random_seed=None):
-    X_data = np.array(training_set[0])
-    y_data = np.array(training_set[1])
+
+    X_data = np.array(X_train)
+    y_data = np.array(y_train)
 
     # Init glob vars
     if initialize:
@@ -199,27 +206,44 @@ def train(session, training_set, validation_set=None,
 
     # Random see for Batch_gen
     np.random.seed(1)
-    for epoch in range(1, epochs+1):
-        batch_g = batch_gen(X_data, y_data,
-                              shuffle=shuffle)
-    for i, (batch_x, batch_y) in enumerate(batch_g):
-        feed = {'tf_x:0': batch_x,
-                'tf_y:0': batch_y,
-                'fc_keep_prob:0': dropout}
-        loss, _ = session.run(
-            ['cross_entropy_loss:0', 'train_op'],
-            feed_dict=feed)
+    for epoch in range(1, epochs + 1):
+        batch_g = batch_gen(
+            X_data, y_data,
+            shuffle=shuffle)
+
+        for i, (batch_x, batch_y) in enumerate(batch_g):
+            feed = {'tf_x:0': batch_x,
+                    'tf_y:0': batch_y,
+                    'fc_keep_prob:0': dropout}
+            loss, _ = session.run(
+                ['cross_entropy_loss:0', 'train_op'],
+                feed_dict=feed)
 
 # Predict
 def predict(session, X_test, return_proba=False):
-    feed = {'tx_x:0': X_test,
+    feed = {'tf_x:0': X_test,
             'fc_keep_prob:0': 1.0}
     if return_proba:
         return session.run('probabilities:0', feed_dict=feed)
     else:
         return session.run('labels:0', feed_dict=feed)
 
-### TO DO:
-# DEFINE GRAPH-LEVEL OBJECT
-# Add Validation
-# Add Save/ Load checkpoints
+# Graph object
+g = tf.Graph()
+
+with g.as_default():
+    cnn()
+
+# Session
+with tf.Session(graph=g) as session:
+    train(session, X_train=X_train_norm, y_train=y_train,
+          initialize=True, random_seed=123)
+
+    preds = predict(session, X_test=X_test_norm,
+                    return_proba=False)
+
+#sub = pd.DataFrame()
+#sub['ImageId'] = test_ID
+#sub['Label'] = preds
+#sub.to_csv('submission.csv', index=False)
+#print(sub.shape)
