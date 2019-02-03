@@ -10,7 +10,6 @@ test_data = pd.read_csv('test.csv', low_memory=False)
 
 PassengerId = test_data['PassengerId']  # for future submission
 
-
 ## STEP 1: DETECT OUTLIERS
 # Analyse effect of outliers on the outcome
 #def detect_outliers(df, n, features):
@@ -55,12 +54,11 @@ def relation_graphs(data, heatmap_features=None):
 
 
 # STEP 3: Join two sets
-y_train = train_data['Survived'].values
+y_train = train_data['Survived'].values.astype(int)
 train_data.drop(['Survived'], axis=1, inplace=True)
 
 # Number of input values for train and test data
 train_len = train_data.shape[0]
-test_len = test_data.shape[0]
 
 # Get join DataFrame
 df = pd.concat(objs=[train_data, test_data], axis=0, sort='False').reset_index(drop=True)
@@ -87,15 +85,71 @@ df['Sex'] = lbl.transform(df['Sex'].values)
 # Apply meadian based on this correlation
 index_NaN_age = list(df["Age"][df["Age"].isnull()].index)  # index of all nan values
 
-#for i in index_NaN_age:
-#    age_med = df["Age"].median()
-#    age_pred = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) &
-#                          (df['Pclass'] == df.iloc[i]["Pclass"]))].median()
+for i in index_NaN_age:
+    age_med = df["Age"].median()
+    age_pred = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) &
+                          (df['Pclass'] == df.iloc[i]["Pclass"]))].median()
 
-#    if not np.isnan(age_pred):
-#        df['Age'].iloc[i] = age_pred
-#    else:
-#        df['Age'].iloc[i] = age_med
+    if not np.isnan(age_pred):
+        df['Age'].iloc[i] = age_pred
+    else:
+        df['Age'].iloc[i] = age_med
 #print(df['Age'].isna().sum())
+#print(df.isna().sum())
 
 # 'Cabin' adjustment (1014 missing values)
+#print(df['Cabin'].dtype)
+df['Cabin'] = df['Cabin'].map(lambda x: x[0] if not pd.isna(x) else 'X')
+
+# FEATURE ENGINEERING
+# Titles
+titles = [i.split(',')[1].split('.')[0].strip() for i in df['Name']]
+df['Title'] = pd.Series(titles)  # add new feature
+#print(df['Title'].unique())
+
+# Get most dominant titles
+df['Title'] = df['Title'].replace([
+    'Don', 'Rev', 'Dr', 'Major', 'Lady',
+    'Sir', 'Mile', 'Col', 'Capt', 'the Countess',
+    'Jonkheer', 'Dona'], 'Rest')
+df['Title'] = df['Title'].map({'Mr': 0, 'Mrs': 1,
+                               'Miss': 1, 'Master': 2,
+                               'Rest': 3, 'Mme': 1,
+                               'Ms': 1, 'Mlle': 1})
+df['Title'] = df['Title'].astype(int)
+#print(df.isna().sum())
+#print(df['Title'].unique())
+
+# Name is unnecessary at this point
+df.drop(['Name'], axis=1, inplace=True)
+
+# Add Family size
+df['Fsize'] = df['SibSp'] + df['Parch'] + 1
+df['Single'] = df['Fsize'].map(lambda x: 1 if x == 1 else 0)
+df['SFsize'] = df['Fsize'].map(lambda x: 1 if x == 2 else 0)
+df['MSingle'] = df['Fsize'].map(lambda x: 1 if 3 <= x <= 4 else 0)
+df['LSingle'] = df['Fsize'].map(lambda x: 1 if x >= 5 else 0)
+
+# Ticket
+#print(df['Ticket'].head())
+# Extract prefixes
+def process_ticket(ticket):
+    if not ticket.isdigit() and '.' not in ticket:
+        return ticket.split()[0]
+    elif not ticket.isdigit():
+        return ticket.split()[0][:-1]
+    else:
+        return 'X'
+df['Ticket'] = df['Ticket'].map(process_ticket)
+
+# Pclass
+#print(df['Pclass'].dtype)
+df['Pclass'] = df['Pclass'].astype('category')
+
+#print(df.shape)
+# Aggregate nominal data and drop unnecessary features
+df.drop(['PassengerId'], axis=1, inplace=True)
+df = pd.get_dummies(df, columns=['Embarked', 'Title',
+                                 'Cabin', 'Ticket',
+                                 'Pclass'])
+#print(df.shape)
