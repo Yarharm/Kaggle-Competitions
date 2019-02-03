@@ -13,7 +13,7 @@ from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFo
 train_data = pd.read_csv('train.csv', low_memory=False)
 test_data = pd.read_csv('test.csv', low_memory=False)
 
-PassengerId = test_data['PassengerId']  # for future submission
+PassengerId = test_data['PassengerId']
 
 ## STEP 1: DETECT OUTLIERS
 # Analyse effect of outliers on the outcome
@@ -196,9 +196,9 @@ ETC = ExtraTreesClassifier()
 etc_grid = {'n_estimators': [10, 50, 100, 150, 200],
             'max_depth': [None],
             'max_features': [1, 3, 10,
-                             'auto', 'sqrt', 'log2'],
-            'min_samples_split': [2, 3, 6, 10],
-            'min_samples_leaf': [1, 3, 6, 10],
+                             'sqrt', 'log2'],
+            'min_samples_split': [2, 3, 6],
+            'min_samples_leaf': [1, 3, 6],
             'bootstrap': [False],
             'criterion': ['gini', 'entropy']
             }
@@ -210,3 +210,68 @@ etc_gs.fit(X_train, y_train)
 
 etc_best = etc_gs.best_estimator_
 print(etc_best)
+
+# RandomForest
+RFC = RandomForestClassifier()
+
+rfc_grid = {'max_depth': [None],
+            'max_features': [1, 3, 6, 10],
+            'min_samples_split': [2, 3, 6, 10],
+            'min_samples_leaf': [1, 3, 6, 10],
+            'bootstrap': [False],
+            'n_estimators': [100, 150, 200,
+                             250, 300, 350],
+            'criterion': ['gini', 'entropy']}
+rfc_gs = GridSearchCV(RFC, param_grid=rfc_grid,
+                      cv=kfold, scoring='accuracy',
+                      n_jobs=-1)
+rfc_gs.fit(X_train, y_train)
+rfc_best = rfc_gs.best_estimator_
+print(rfc_best)
+
+# Gradient booosting
+GBC = GradientBoostingClassifier()
+
+gbc_grid = {'loss': ['deviance'],
+            'learning_rate': [0.01, 0.05, 0.1, 0.15],
+            'n_estimators': [100, 150, 200,
+                             300, 350],
+            'min_samples_leaf': [70, 100, 150],
+            'max_depth': [4, 6, 8],
+            'max_features': [0.3, 0.1, 'sqrt', 'log2']
+            }
+gbc_gs = GridSearchCV(GBC, param_grid=gbc_grid,
+                      cv=kfold, scoring='accuracy',
+                      n_jobs=-1)
+gbc_gs.fit(X_train, y_train)
+gbc_best = gbc_gs.best_estimator_
+print(gbc_best)
+
+# SVC
+SVC = SVC(probability=True)
+
+svc_grid = {'C': [1, 10, 500, 100,
+                  200, 300, 1000],
+            'kernel': ['rbf', 'poly'],
+            'gamma': [0.001, 0.01, 0.1, 1]}
+svc_gs = GridSearchCV(SVC, param_grid=svc_grid,
+                      cv=kfold, scoring='accuracy',
+                      n_jobs=-1)
+svc_gs.fit(X_train, y_train)
+svc_best = svc_gs.best_estimator_
+print(svc_best)
+
+# Ensemble
+votingClass = VotingClassifier(
+    estimators=[('adac', ada_best),
+                ('extc', etc_best),
+                ('rfc', rfc_best),
+                ('gbc', gbc_best),
+                ('svc', svc_best)], voting='soft', n_jobs=-1)
+
+votingClass = votingClass.fit(X_train, y_train)
+pred = votingClass.predict(X_test)
+pred = pd.Series(pred, name='Survived')
+result = pd.concat([PassengerId, pred], axis=1)
+print(result.shape)
+result.to_csv('ensemble_sub.csv', index=False)
