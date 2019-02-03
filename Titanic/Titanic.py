@@ -3,6 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, \
+    GradientBoostingClassifier, VotingClassifier, ExtraTreesClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold
 
 # Get data
 train_data = pd.read_csv('train.csv', low_memory=False)
@@ -153,3 +158,55 @@ df = pd.get_dummies(df, columns=['Embarked', 'Title',
                                  'Cabin', 'Ticket',
                                  'Pclass'])
 #print(df.shape)
+
+
+# MODELING
+X_train = df[: train_len]
+X_test = df[train_len:]
+#print(X_train.shape)
+#print(X_test.shape)
+#print(y_train.shape)
+
+
+# Ensembling with Majority Vote (Voting Classifier)
+# Base classifiers: SVC, AdaBOOST, RMC, ETC, GradBoosting
+kfold = StratifiedKFold(10)
+
+# AdaBOOST
+DTC = DecisionTreeClassifier(random_state=1, max_features='auto',
+                             class_weight='balanced', max_depth=None)
+adaCL = AdaBoostClassifier(base_estimator=DTC)
+ada_grid = {'base_estimator__criterion': ['gini', 'entropy'],
+            'base_estimator__splitter': ['random', 'best'],
+            'algorithm': ['SAMME', 'SAMME.R'],
+            'n_estimators': [5, 10, 15, 25,
+                             35, 45, 50, 60],
+            'learning_rate': [0.0001, 0.001, 0.01, 0.1,
+                              0.2, 0.3, 0.5, 1.0, 1.5]}
+ada_gs = GridSearchCV(adaCL, param_grid=ada_grid,
+                     cv=kfold, scoring='accuracy',
+                     n_jobs=-1)
+ada_gs.fit(X_train, y_train)
+ada_best = ada_gs.best_estimator_
+print(ada_best)
+
+# ExtraTrees
+ETC = ExtraTreesClassifier()
+
+etc_grid = {'n_estimators': [10, 50, 100, 150, 200],
+            'max_depth': [None],
+            'max_features': [1, 3, 10,
+                             'auto', 'sqrt', 'log2'],
+            'min_samples_split': [2, 3, 6, 10],
+            'min_samples_leaf': [1, 3, 6, 10],
+            'bootstrap': [False],
+            'criterion': ['gini', 'entropy']
+            }
+
+etc_gs = GridSearchCV(ETC, param_grid=etc_grid,
+                      cv=kfold, scoring='accuracy',
+                      n_jobs=-1)
+etc_gs.fit(X_train, y_train)
+
+etc_best = etc_gs.best_estimator_
+print(etc_best)
