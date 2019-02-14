@@ -72,9 +72,57 @@ class RNN(object):
             self.build(sampling=sampling)  # Two diff graphs for sampling/training
             self.init_op = tf.global_variables_initializer()
 
-    def build(self):
-        pass
+    def build(self, sampling):
+        """
+        Sampling mode: batch_size = 1; num_steps = 1
+        Training mode: batch_size = self.batch_size; num_steps = self.num_steps
+        :param sampling: Bool, True: perform Sampling mode; False: perform Training mode
+        :return: build multilayer RNN
+        """
+        if sampling == True:
+            batch_size, num_steps = 1, 1
+        else:
+            batch_size = self.batch_size
+            num_steps = self.num_steps
 
+        # Define placeholders
+        tf_x = tf.placeholder(tf.int32,
+                              shape=[batch_size, num_steps],
+                              name='tf_x')
+        tf_y = tf.placeholder(tf.int32,
+                              shape=[batch_size, num_steps],
+                              name='tf_y')
+        tf_keep_proba = tf.placeholder(tf.float32,
+                                       name='tf_keep_proba')
+
+        # Encode features (One-hot):
+        x_onehot = tf.one_hot(tf_x, depth=self.num_classes)
+        y_onehot = tf.one_hot(tf_y, depth=self.num_classes)
+
+        # Build RNN [cell:LSTM, wrapped in Dropout layer]
+        cells = tf.contrib.rnn.MultiRNNCell(
+            [tf.contrib.rnn.DropoutWrapper(
+                tf.nn.rnn_cell.LSTMCell(self.lstm_size),
+                output_keep_prob = tf_keep_proba)
+                for _ in range(self.num_layers)])
+
+        # Def state
+        self.init_state = cells.zero_state(
+            batch_size, tf.float32
+        )
+
+        # Run individual sequence through the RNN
+        # Get LSTM results
+        lstm_outputs, self.final_state = tf.nn.dynamic_rnn(
+            cells, x_onehot,
+            initial_state=self.init_state
+        )
+
+        ### TO DO:
+        # Probably need to reshape results (?????)
+        # Get logits/ call softmax
+        # Def Cost func and Optimizer
+        # GOOglE GRAD CLIPPING
 
     def train(self):
         pass
