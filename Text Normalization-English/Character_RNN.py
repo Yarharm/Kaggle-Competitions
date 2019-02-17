@@ -51,6 +51,19 @@ def batch_generator(X, y, num_steps):
         yield (X[:, i*num_steps:(i+1)*num_steps],
                y[:, i*num_steps:(i+1)*num_steps])
 
+def get_top_char(probas, char_size, top_n=5):
+    """
+    Get character based on obtained probabilities
+    :param probas:
+    :param char_size:
+    :param top_n:
+    :return:
+    """
+    p = np.squeeze(probas)
+    p[np.argsort(p)[:-top_n]] = 0.0
+    p = p / np.sum(p)
+    ch_id = np.random.choice(char_size, 1, p=p)[0]
+    return ch_id
 ## RNN model
 class RNN(object):
     def __init__(self, num_classes, batch_size=64,
@@ -118,15 +131,95 @@ class RNN(object):
             initial_state=self.init_state
         )
 
-        ### TO DO:
-        # Probably need to reshape results (?????)
-        # Get logits/ call softmax
-        # Def Cost func and Optimizer
-        # GOOglE GRAD CLIPPING
+        seq_output_reshaped = tf.reahape(lstm_outputs,
+                                         shape=[-1, self.lstm_size],
+                                         name='seq_output_reshaped')
 
-    def train(self):
-        pass
+        logits = tf.layers.Dense(inputs=seq_output_reshaped,
+                                 units=self.num_classes,
+                                 activation=None,
+                                 name='logits')
 
-#    ????
-#    def predict(self):
-#        pass
+        proba = tf.nn.softmax(logits,
+                              name='probabilities')
+        y_reshaped = tf.reshape(y_onehot,
+                                shape=[-1, self.num_classes],
+                                name='y_reshaped')
+
+        cost = tf.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y_reshaped),
+            name='cost')
+
+        # Gradient clipping
+        tvars = tf.trainable.variables()
+        grads, _ = tf.clip_by_global_norm(
+            tf.gradients(cost, tvars),
+            self.grad_clip
+        )
+
+        optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        train_op = optimizer.apply_gradients(
+            zip(grads, tvars),
+            name='train_op'
+        )
+    def train(self, train_x, train_y, num_epochs):
+        with tf.Session(graph=self.g) as session:
+            session.run(self.init_op)
+
+            n_batches = train_x.shape[1] // self.num_steps
+            iterations = n_batches * num_epochs
+            for epoch in range(num_epochs):
+                new_state = session.run(self.init_state)
+                loss = 0
+                # Batch gen
+                bgen = batch_generator(train_x, train_y, self.num_steps)
+                for b, (batch_x, batch_y) in enumerate(bgen, 1):
+                    iteration = epoch * n_batches + b
+
+                    feed = {'tf_x:0': batch_x,
+                            'tf_y:0': batch_y,
+                            'tf_keep_proba:0': self.keep_prob,
+                            self.init_state: new_state}
+                    batch_cost, _, new_state = session.run(
+                        ['cost:0', 'train_op', self.final_state],
+                        feed_dict=feed
+                    )
+
+    def sample(self, output_length, starter_seq='The ',):
+        """
+        Calculate probabily of the next character based on the observed equence
+        :param output_length: Observed sequence
+        :param starter_seq:
+        :return:
+        """
+        observed_seq = [ch for ch in starter_seq]
+        with tf.Sessions(graph=self.g) as session:
+            new_state = session.run(self.initial_state)
+            # Run on starter sequence
+            for ch in starter_seq:
+                x = np.zeros((1, 1))
+                x[0, 0] = char_to_int[ch]
+                feed = {'tf_x:0': x,
+                        'tf_keep_proba:0': 1.0,
+                        self.init_state: new_state}
+                proba, new_state = session.run(
+                    ['probabilities:0', self.final_state],
+                    feed_dict=feed
+                )
+
+            ch_id = get_top_char(proba, len(chars))
+            observed_seq.append(int_to_char[ch_id])
+            # Run Sampling on a new sequence
+            for i in range(output_length):
+                x[0,0] = ch_id
+                feed = {'tf_x:0': x,
+                        'tf_keep_proba:0': 1.0,
+                        self.init_state: new_state}
+                proba, new_state = session.run(
+                    ['probabilities:0', self.final_state],
+                    feed_dict = feed
+                )
+
+                ch_id = get_top_char(proba, len(chars))
+                observed_seq.update(int_to_char(ch_id))
+        return ''.join(observed_seq)
