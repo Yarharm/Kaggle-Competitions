@@ -270,7 +270,7 @@ GBoost = GradientBoostingRegressor(n_estimators=3000, learning_rate=0.05,
 
 
 # Simple Stacking class
-class StackedModels():
+class StackedModels:
     """
     Exploting stacking as a part of Ensemble technique
     Ensemble (Boosting, Bagging, Stacking)
