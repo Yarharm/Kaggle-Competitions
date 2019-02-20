@@ -19,42 +19,72 @@ def get_tables():
     print(item_cat.head(2).transpose())
     print('\nItems')
     print(items.head(2).transpose())
-
+def get_df():
+    print(df.head(2).transpose())
 #print(test_set.head(3).transpose())
 #print(df.dtypes)
 #print(df.describe())
 #print(df.head(2).transpose())
 #get_tables()
 
-# Explore Target
+# Explore Target (CONTAINS OUTLIER)
 target = df['item_cnt_day']
-sns.distplot(target, fit=norm)
-# Fitted parameters of the function
-(mu, sigma) = norm.fit(target)
+print(target.max())
+fig, ax = plt.subplots(figsize=(16, 5))
+sns.distplot(target, ax=ax)
 
-# Plot the distribution
-# Place legend on the axis
-plt.legend(['Normal dist. ($\mu=$ {:.2f} and'
-            '$\sigma=$ {:.2f})'.format(mu, sigma)],
-           loc='best')
-plt.title('Items cold distribution')
-plt.ylabel('Frequency')
-#plt.show()
+# BoxPlot
+fig, ax = plt.subplots(figsize=(12, 3))
+sns.boxplot(x=target, data=df)
 
+plt.show()
 ## Combine categories in groups
-print(item_cat['item_category_name'].unique())
-# Hash table of categories
-category_table = {}
-# Retrive first word from group: ^([^\s]+)
-item_cat['item_category_name'].map(lambda x: category_table.update({re.match('^([^\s]+)', x)[0]: 1}))
-for key, value in category_table.items():
-    print(key)
+#print(item_cat['item_category_name'].unique())
 
 
+# Substitute category name by the first word only
+item_cat['item_category_name'] = item_cat['item_category_name'].map(lambda x: re.match('^([^\s]+)', x)[0])
 
-## DISTRIBUTE ITEMS TO CATEGORIES
+# Mapping item_id => item_category_id
+item_id_to_item_cat = {}
+for index, row in items.iterrows():
+    item_id_to_item_cat.update({row['item_id']: row['item_category_id']})
+
+# Mapping item_category_id => category_name
+item_cat_to_cat_name = {}
+for index, row in item_cat.iterrows():
+    item_cat_to_cat_name.update({row['item_category_id']: row['item_category_name']})
+
+# Map item ids
+df['item_name'] = df['item_id'].map(lambda x: item_cat_to_cat_name[item_id_to_item_cat[x]])
+print(df.tail(2).transpose())
+
 ## UTILIZE SHOP NAMES
-## ??????????UTILIZE ITEM NAME????????????
+
+# Separate by shop location (Moskva, Omsk) and shop type (TRK, TC)
+# Mapping shop_id => shop_name
+shop_id_to_shop_name = {}
+for index, row in shops.iterrows():
+    shop_id_to_shop_name.update({row['shop_id']: row['shop_name']})
+
+df['shop_location'] = df['shop_id'].map(lambda x: shop_id_to_shop_name[x].split()[0])
+df['shop_type'] = df['shop_id'].map(lambda x: shop_id_to_shop_name[x].split()[1])
+
+
+## Explore item_price (CONTAINT OUTLIER => BOXPLOT)
+sns.set(style='whitegrid')
+sns.boxplot(x=df['item_price'])
+
+fig, ax = plt.subplots(figsize=(16, 8))
+ax.scatter(df['item_price'], df['item_cnt_day'])
+ax.set_xlabel('Price for the item distribution')
+
+plt.show()
+
+
+# APPENDING PARTIAL NOMINAL DATA TO THE DF
+#dummy = pd.get_dummies(df['item_name'])
+#df = pd.concat([df, dummy], axis=1)
 
 ## EDA
 # Scatterplot matrix(Pairplot)
