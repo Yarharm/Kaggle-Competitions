@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import norm
 import re
+import datetime
+import warnings
+
+# set warnings
+warnings.filterwarnings('ignore')
 # Get data
 df = pd.read_csv('sales_train_v2.csv', low_memory=False)
 test_set = pd.read_csv('test.csv', low_memory=False)
@@ -11,6 +16,28 @@ shops = pd.read_csv('shops.csv', low_memory=False)
 item_cat = pd.read_csv('item_categories.csv', low_memory=False)
 items = pd.read_csv('items.csv', low_memory=False)
 
+# Format Date column
+
+# Cpnvert from string(object) to the datetime object(datetime64)
+df['date'] = df['date'].map(lambda x: datetime.datetime.strptime(x, '%d.%m.%Y'))
+
+sales = df.groupby(['date_block_num', 'shop_id', 'item_id']).agg({'date': ['min', 'max'],
+                                                                  'item_price': 'mean',
+                                                                  'item_cnt_day': 'sum'})
+
+# Plot number of items per category
+cat = items.groupby('item_category_id').item_id.count()
+cat = cat.sort_values(by='item_id', ascending=False)
+
+plt.figure(figsize=(8, 4))
+ax = sns.barplot(cat.item_category_id, cat.item_id, alpha=0.8)
+plt.title('Items per Category')
+plt.ylabel('Number of items', fontsize=10)
+plt.xlabel('Number of categories', fontsize=10)
+plt.show()
+print(cat)
+
+# Single series analysis
 def get_tables():
     print(df.head(2).transpose())
     print('\nShops')
@@ -29,15 +56,15 @@ def get_df():
 
 # Explore Target (CONTAINS OUTLIER)
 target = df['item_cnt_day']
-print(target.max())
-fig, ax = plt.subplots(figsize=(16, 5))
-sns.distplot(target, ax=ax)
+def target_pot():
+    fig, ax = plt.subplots(figsize=(16, 5))
+    sns.distplot(target, ax=ax)
 
-# BoxPlot
-fig, ax = plt.subplots(figsize=(12, 3))
-sns.boxplot(x=target, data=df)
+    # BoxPlot
+    fig, ax = plt.subplots(figsize=(12, 3))
+    sns.boxplot(x=target, data=df)
 
-plt.show()
+    plt.show()
 ## Combine categories in groups
 #print(item_cat['item_category_name'].unique())
 
@@ -57,7 +84,6 @@ for index, row in item_cat.iterrows():
 
 # Map item ids
 df['item_name'] = df['item_id'].map(lambda x: item_cat_to_cat_name[item_id_to_item_cat[x]])
-print(df.tail(2).transpose())
 
 ## UTILIZE SHOP NAMES
 
@@ -72,14 +98,15 @@ df['shop_type'] = df['shop_id'].map(lambda x: shop_id_to_shop_name[x].split()[1]
 
 
 ## Explore item_price (CONTAINT OUTLIER => BOXPLOT)
-sns.set(style='whitegrid')
-sns.boxplot(x=df['item_price'])
+def price_plot():
+    sns.set(style='whitegrid')
+    sns.boxplot(x=df['item_price'])
 
-fig, ax = plt.subplots(figsize=(16, 8))
-ax.scatter(df['item_price'], df['item_cnt_day'])
-ax.set_xlabel('Price for the item distribution')
+    fig, ax = plt.subplots(figsize=(16, 8))
+    ax.scatter(df['item_price'], df['item_cnt_day'])
+    ax.set_xlabel('Price for the item distribution')
 
-plt.show()
+    plt.show()
 
 
 # APPENDING PARTIAL NOMINAL DATA TO THE DF
