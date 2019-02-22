@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import norm
+import statsmodels.api as sm
 import re
 import datetime
 import warnings
@@ -18,24 +19,51 @@ items = pd.read_csv('items.csv', low_memory=False)
 
 # Format Date column
 
-# Cpnvert from string(object) to the datetime object(datetime64)
-df['date'] = df['date'].map(lambda x: datetime.datetime.strptime(x, '%d.%m.%Y'))
+# Convert from string(object) to the datetime object(datetime64)
+#df['date'] = df['date'].map(lambda x: datetime.datetime.strptime(x, '%d.%m.%Y'))
+#df['day'] = df['date'].apply(lambda x: x.day)
+#df['month'] = df['date'].apply(lambda x: x.month)
+#df['year'] = df['date'].apply(lambda x: x.year)
+#df['weekend'] = df['date'].apply(lambda x: x.weekday())  # 0 = Monday, 6 = Sunday
 
-sales = df.groupby(['date_block_num', 'shop_id', 'item_id']).agg({'date': ['min', 'max'],
-                                                                  'item_price': 'mean',
-                                                                  'item_cnt_day': 'sum'})
+#sales = df.groupby(['date_block_num', 'shop_id', 'item_id']).agg({'date': ['min', 'max'],
+#                                                                  'item_price': 'mean',
+#                                                                  'item_cnt_day': 'sum'})
 
-# Plot number of items per category
-cat = items.groupby('item_category_id').item_id.count()
-cat = cat.sort_values(by='item_id', ascending=False)
+# Left join item_category_id to the main DataFrame
+#df = df.join(items['item_category_id'])
+#print(df.columns)
 
-plt.figure(figsize=(8, 4))
-ax = sns.barplot(cat.item_category_id, cat.item_id, alpha=0.8)
-plt.title('Items per Category')
-plt.ylabel('Number of items', fontsize=10)
-plt.xlabel('Number of categories', fontsize=10)
-plt.show()
-print(cat)
+#TO DO: Add item count per month per shop
+
+
+
+
+
+
+# Add item count per month
+#mapping = df.groupby('date_block_num').item_cnt_day.sum()
+#df['item_cnt_month'] = df['date_block_num'].apply(lambda x: mapping[x])
+#print(df.tail(2).transpose())
+
+# Total sales per month
+m_sales = df.groupby('date_block_num').item_cnt_day.sum()
+def montly_sales(sales):
+    plt.figure(figsize=(12, 8))
+    plt.ylabel('Sales')
+    plt.xlabel('Time')
+    plt.title('Sales per month')
+    plt.plot(sales)
+    plt.show()
+    ## Conclusion: Observed seasonality
+
+# Explore trend, seasonality and residuals
+def stats(sales):
+    residual_1 = sm.tsa.seasonal_decompose(sales.values, freq=12, model='multiplicative')
+    residual_1.plot()
+    residual_2 = sm.tsa.seasonal_decompose(sales.values, freq=12, model="additive")
+    residual_2.plot()
+    plt.show()
 
 # Single series analysis
 def get_tables():
@@ -112,6 +140,7 @@ def price_plot():
 # APPENDING PARTIAL NOMINAL DATA TO THE DF
 #dummy = pd.get_dummies(df['item_name'])
 #df = pd.concat([df, dummy], axis=1)
+
 
 ## EDA
 # Scatterplot matrix(Pairplot)
