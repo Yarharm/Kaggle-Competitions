@@ -3,13 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import norm
-import statsmodels.api as sm
 import re
 import datetime
 import warnings
 
 # set warnings
 warnings.filterwarnings('ignore')
+
 # Get data
 df = pd.read_csv('sales_train_v2.csv', low_memory=False)
 test_set = pd.read_csv('test.csv', low_memory=False)
@@ -17,8 +17,33 @@ shops = pd.read_csv('shops.csv', low_memory=False)
 item_cat = pd.read_csv('item_categories.csv', low_memory=False)
 items = pd.read_csv('items.csv', low_memory=False)
 
-# Format Date column
+# Duplicated rows
+#print(df[df.duplicated(keep=First)])
+#df.drop_duplicates()
 
+## MEMORY SAVING MECHANISM(DOWNCASTING)
+def downcast_dtypes(df):
+    float_cols = [c for c in df if df[c].dtype == "float64"]
+    int_cols = [c for c in df if df[c].dtype in ["int64", "int32"]]
+    df[float_cols] = df[float_cols].astype(np.float32)
+    df[int_cols] = df[int_cols].astype(np.int16)
+    return df
+
+
+# Create pivot table
+sales_by_item_id = df.pivot_table(index=['item_id'], values=['item_cnt_day'],
+                                  columns='date_block_num', aggfunc=np.sum, fill_value=0).reset_index()
+sales_by_item_id.columns = sales_by_item_id.columns.droplevel().map(str)
+sales_by_item_id = sales_by_item_id.reset_index(drop=True).rename_axis(None, axis=1)
+sales_by_item_id.columns.values[0] = 'item_id'
+#print(sales_by_item_id)
+
+
+# Products with no sales for the last 6 months
+outdated_items = sales_by_item_id[sales_by_item_id.loc[:, '27':].sum(axis=1) == 0]
+print(outdated_items)
+
+## Format Date column
 # Convert from string(object) to the datetime object(datetime64)
 #df['date'] = df['date'].map(lambda x: datetime.datetime.strptime(x, '%d.%m.%Y'))
 #df['day'] = df['date'].apply(lambda x: x.day)
@@ -33,8 +58,6 @@ items = pd.read_csv('items.csv', low_memory=False)
 # Left join item_category_id to the main DataFrame
 #df = df.join(items['item_category_id'])
 #print(df.columns)
-
-#TO DO: Add item count per month per shop
 
 
 
@@ -96,7 +119,6 @@ def target_pot():
 ## Combine categories in groups
 #print(item_cat['item_category_name'].unique())
 
-
 # Substitute category name by the first word only
 item_cat['item_category_name'] = item_cat['item_category_name'].map(lambda x: re.match('^([^\s]+)', x)[0])
 
@@ -140,20 +162,3 @@ def price_plot():
 # APPENDING PARTIAL NOMINAL DATA TO THE DF
 #dummy = pd.get_dummies(df['item_name'])
 #df = pd.concat([df, dummy], axis=1)
-
-
-## EDA
-# Scatterplot matrix(Pairplot)
-cols = ['date', 'date_block_num', 'item_price', 'item_cnt_day']
-sns.pairplot(df[cols], height=2.5)
-plt.tight_layout()
-plt.show()
-
-# Correlation matrix
-cm = np.corrcoef(df.values.T)
-sns.set(font_scale=1.5)
-hm = sns.heatmap(cm, cbar=True,
-                 annot=True, square=True,
-                 fmt='.2f', annot_kws={'size': 15},
-                 yticklabels=cols, xticklabels=cols)
-plt.show()
