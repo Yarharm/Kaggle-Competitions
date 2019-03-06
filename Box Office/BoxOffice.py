@@ -7,7 +7,8 @@ import seaborn as sns
 import re
 import datetime
 from collections import Counter
-
+import eli5
+import shap
 train = pd.read_csv('train.csv', low_memory=False)
 test = pd.read_csv('test.csv', low_memory=False)
 
@@ -234,3 +235,13 @@ m.fit(X_train, y_train,
 
 
 # ELI5 and SHAP analysis(Kaggle tutorial)
+eli5.show_weights(model1, feature_filter=lambda x: x != '<BIAS>')
+
+explainer = shap.TreeExplainer(model1, X_train)
+shap_values = explainer.shap_values(X_train)
+
+shap.summary_plot(shap_values, X_train)
+
+top_cols = X_train.columns[np.argsort(shap_values.std(0))[::-1]][:10]
+for col in top_cols:
+    shap.dependence_plot(col, shap_values, X_train)
