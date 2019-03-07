@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 import datetime
-from collections import Counter
 import eli5
 import shap
+from collections import Counter
+
 train = pd.read_csv('train.csv', low_memory=False)
 test = pd.read_csv('test.csv', low_memory=False)
 
@@ -162,7 +163,6 @@ df['has_tagline'] = df['has_tagline'].apply(str)
 df['part_of_collection'] = df['collection_id'].map(lambda x: 0 if x == 0 else 1)
 df['part_of_collection'] = df['part_of_collection'].apply(str)
 
-
 # Date: Day, Month, Year, isWeekend, Holiday, Number of movies release at the same time
 df[['release_month', 'release_day', 'release_year']] = df['release_date'].str.split('/', expand=True).replace(np.nan,
                                                                                                               '0').astype(
@@ -173,10 +173,22 @@ df['release_quarter'] = releaseDate.dt.quarter.apply(str)
 
 # Split by 'en' and the rest
 df['original_language'] = df['original_language'].map(lambda x: 1 if x == 'en' else 0)
+
 df['original_language'] = df['original_language'].apply(str)
 
 # Normilize budget
 df['budget'] = np.log1p(df['budget'])
+
+# Distribution of budget
+#fig, ax = plt.subplots(figsize=(16, 10))
+#plt.subplot(1, 2, 1)
+#plt.hist(df['budget'], color='green')
+#plt.title('Distribution of log budget')
+
+# Distribution of budget vs Revenue
+#plt.subplot(1, 2, 2)
+#plt.scatter(df.loc[:y_train.shape[0] - 1, 'budget'], y_train)
+#plt.title('log budget vs revenue')
 
 # Label encoding
 labels = ['dominant_crew_gender', 'dominant_cast_gender',
@@ -188,8 +200,15 @@ labels_encoded = pd.get_dummies(df[labels])
 ## Additional ratio features
 # Mean runtime per year
 df['meanruntimeByYear'] = df.groupby("release_year")["runtime"].aggregate('mean')
+df['budget_to_popularity'] = df['budget'] / df['popularity']
+df['budget_to_runtime'] = df['budget'] / df['runtime']
+df['runtime_to_mean_year'] = df['runtime'] / df.groupby("release_year")["runtime"].transform('mean')
+df['popularity_to_mean_year'] = df['popularity'] / df.groupby("release_year")["popularity"].transform('mean')
+df['budget_to_mean_year'] = df['budget'] / df.groupby("release_year")["budget"].transform('mean')
 
 
+# Catplot[Barchart] between has_homepage and revenue
+#sns.catplot(x='has_homepage', y='revenue', data=df)
 # Drop columns
 drop_columns = ['poster_path', 'id', 'belongs_to_collection',
                 'genres', 'homepage', 'imdb_id', 'overview',
@@ -202,8 +221,6 @@ df.drop(drop_columns, axis=1, inplace=True)
 df.drop(labels, axis=1, inplace=True)  # Drop encoded categorical data
 
 df = pd.concat([df, labels_encoded], axis=1)  # Append encoded labels
-
-
 
 ## Modeling
 print(df.shape)
@@ -228,18 +245,15 @@ params = {'num_leaves': 30,
          "metric": 'rmse',
          "lambda_l1": 0.2,
          "verbosity": -1}
+
 m = lgb.LGBMRegressor(**params, n_estimators=20000, n_jobs=-1)
 m.fit(X_train, y_train,
         eval_set=[(X_train, y_train), (X_valid, y_valid)], eval_metric='rmse',
         verbose=1000, early_stopping_rounds=200)
 
-
 # ELI5 and SHAP analysis(Kaggle tutorial)
-eli5.show_weights(model1, feature_filter=lambda x: x != '<BIAS>')
-
-explainer = shap.TreeExplainer(model1, X_train)
+explainer = shap.TreeExplainer(m, X_train)
 shap_values = explainer.shap_values(X_train)
-
 shap.summary_plot(shap_values, X_train)
 
 top_cols = X_train.columns[np.argsort(shap_values.std(0))[::-1]][:10]
