@@ -8,6 +8,9 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, \
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold
+import missingno as msno
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
 
 # Get data
 train_data = pd.read_csv('train.csv', low_memory=False)
@@ -70,6 +73,21 @@ df = pd.concat(objs=[train_data, test_data], axis=0, sort='False').reset_index(d
 
 
 # STEP 4: Add missing values and transform skewed data
+print(msno.bar(df))
+
+# Swarmplot
+plt.figure(figsize=(12,12))
+sns.swarmplot(x="Sex", y="Age", hue='Pclass', data=df,
+              size=10, palette=['orange','brown','purple'])
+
+plt.figure(figsize=(12,12))
+sns.swarmplot(x="Sex", y="Age", hue='Survived',
+              data=df, size=10, palette='viridis')
+plt.show()
+
+# Crosstab
+pd.crosstab([df.Sex,df.Survived],df.Pclass, margins=True).style.background_gradient(cmap='autumn_r')
+
 # 'Fare' adjustment
 #print(df['Fare'].isna().sum())
 df['Fare'] = df['Fare'].fillna(df['Fare'].median())
@@ -268,6 +286,45 @@ votingClass = VotingClassifier(
                 ('rfc', rfc_best),
                 ('gbc', gbc_best),
                 ('svc', svc_best)], voting='soft', n_jobs=-1)
+
+# ROC curve
+ada_fpr, ada_tpr, thresholds = roc_curve(y_test, ada_best.predict_proba(X_test)[:,1])
+etc_fpr, etc_tpr, etc_thresholds = roc_curve(y_test, etc_best.predict_proba(X_test)[:,1])
+svc_fpr, svc_tpr, svc_thresholds = roc_curve(y_test, svc_best.predict_proba(X_test)[:,1])
+gbc_fpr, gbc_tpr, ada_thresholds = roc_curve(y_test, gbc_best.predict_proba(X_test)[:,1])
+
+plt.figure(figsize=(9,9))
+log_roc_auc = roc_auc_score(y_test, ada_best.predict(X_test))
+print("logreg model AUC = {} " .format(log_roc_auc))
+rf_roc_auc = roc_auc_score(y_test, etc_best.predict(X_test))
+print("random forest model AUC ={}" .format(rf_roc_auc))
+knn_roc_auc = roc_auc_score(y_test, svc_best.predict(X_test))
+print("KNN model AUC = {}" .format(knn_roc_auc))
+gbc_roc_auc = roc_auc_score(y_test, gbc_best.predict(X_test))
+print("GBC Boost model AUC = {}" .format(gbc_roc_auc))
+
+# Plot Adaboost ROC
+plt.plot(ada_fpr, ada_tpr, label='Logistic Regression')
+
+# Plot Extra trees ROC
+plt.plot(etc_fpr, etc_tpr, label='Random Forest')
+
+# Plot SVC ROC
+plt.plot(svc_fpr, svc_tpr, label=' KnnClassifier')
+
+# Plot GradientBooseting Boost ROC
+plt.plot(gbc_fpr, gbc_tpr, label='GradientBoostingclassifier')
+
+# Plot Base Rate ROC
+plt.plot([0, 1], [0, 1], label='Base Rate' 'k--')
+
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Graph')
+plt.legend(loc="lower right")
+plt.show()
 
 votingClass = votingClass.fit(X_train, y_train)
 pred = votingClass.predict(X_test)
