@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 from sklearn.linear_model import LogisticRegression
 from catboost import CatBoostClassifier
+import lightgbm as lgb
 from sklearn.metrics import roc_auc_score
 
 # Get Data
@@ -40,6 +41,7 @@ X_test = scaler.fit_transform(X_test)
 # Prepare folds
 n_folds = 20
 folds = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=2)
+repeated_folds = RepeatedStratifiedKFold(n_splits=10, n_repeats=20, random_state=42)
 
 def train_model(X, X_test, y, params, folds=folds, model_type='lgb',
                 plot_feature_importacne=False, averaging='usual',model=None):
@@ -67,6 +69,21 @@ def train_model(X, X_test, y, params, folds=folds, model_type='lgb',
             y_pred_valid = m.predict(X_valid)
             y_pred = m.predict(X_test)
 
+        # LGB
+        if model_type == 'lgb':
+            train_data = lgb.Dataset(X_train_temp, label=y_train_temp)
+            valid_data = lgb.Dataset(X_valid, label=y_valid)
+
+            m = lgb.train(params,
+                          train_data,
+                          num_boost_round=2000,
+                          valid_sets=[train_data, valid_data],
+                          verbose_eval=500,
+                          early_stopping_rounds=200)
+
+            y_pred_valid = m.predict(X_valid)
+            y_pred = m.predict(X_test, num_iteration=m.best_iteration_)
+
         # Append scores
         oof[valid_index] = y_pred_valid.reshape(-1, )
         scores.append(roc_auc_score(y_valid, y_pred_valid))
@@ -77,7 +94,7 @@ def train_model(X, X_test, y, params, folds=folds, model_type='lgb',
         elif averaging == 'rank':
             predictions += pd.Series(y_pred).rank().values
         predictions /= n_folds
-        
+
     print('CV mean score: {0:.4f}, std: {1:.4f}.'.format(np.mean(scores), np.std(scores)))
     return oof, predictions, scores
 
@@ -86,9 +103,14 @@ def train_model(X, X_test, y, params, folds=folds, model_type='lgb',
 # 1) Logistic regression
 model = LogisticRegression(class_weight='balanced', penalty='l1',
                            C=0.1, solver='liblinear')
-#train_model(X_train, X_test, y_train, params=None, model_type='sklearn', model=model)
+#oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=None, model_type='sklearn', model=model)
 
-# 2) CatBoost
+# 2) Logistic regression with repeated folds
+model = LogisticRegression(class_weight='balanced', penalty='l1',
+                           C=0.1, solver='liblinear')
+oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=None, folds=repeated_folds, model_type='sklearn', model=model)
+
+# 3) CatBoost
 cat_params = {'learning_rate': 0.02,
               'depth': 5,
               'l2_leaf_reg': 10,
@@ -97,4 +119,4 @@ cat_params = {'learning_rate': 0.02,
               'od_wait': 50,
               'random_seed': 22,
               'allow_writing_files': False}
-train_model(X_train, X_test, y_train, params=cat_params, model_type='cat')
+#oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=cat_params, model_type='cat')
