@@ -4,9 +4,13 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 from sklearn.linear_model import LogisticRegression
+import eli5
+from eli5.sklearn import PermutationImportance
 from catboost import CatBoostClassifier
 import lightgbm as lgb
 from sklearn.metrics import roc_auc_score
+from IPython.display import display
+import os
 
 # Get Data
 train = pd.read_csv("train.csv", low_memory=False)
@@ -101,8 +105,8 @@ def train_model(X, X_test, y, params, folds=folds, model_type='lgb',
 ## Declarations
 
 # 1) Logistic regression
-model = LogisticRegression(class_weight='balanced', penalty='l1',
-                           C=0.1, solver='liblinear')
+#model = LogisticRegression(class_weight='balanced', penalty='l1',
+#                           C=0.1, solver='liblinear')
 #oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=None, model_type='sklearn', model=model)
 
 # 2) Logistic regression with repeated folds
@@ -120,3 +124,17 @@ cat_params = {'learning_rate': 0.02,
               'random_seed': 22,
               'allow_writing_files': False}
 #oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=cat_params, model_type='cat')
+
+# ELI5 analysis
+perm = PermutationImportance(model, random_state=1).fit(X_train, y_train)
+result = eli5.show_weights(perm, top=25).data
+fp = open('{}/eli5_result.html'.format(os.getcwd()), 'w')
+fp.write(result)
+fp.close()
+
+#Number of features which are important for the model
+print((model.coef_ != 0).sum())
+
+# Analysis of best features
+top_features = [i[1:] for i in eli5.formatters.as_dataframe.explain_weights_df(model).feature if 'BIAS' not in i]
+print(top_features)
