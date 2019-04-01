@@ -9,6 +9,7 @@ from eli5.sklearn import PermutationImportance
 from catboost import CatBoostClassifier
 import lightgbm as lgb
 from sklearn.metrics import roc_auc_score
+import shap
 from IPython.display import display
 import os
 
@@ -110,9 +111,9 @@ def train_model(X, X_test, y, params, folds=folds, model_type='lgb',
 #oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=None, model_type='sklearn', model=model)
 
 # 2) Logistic regression with repeated folds
-model = LogisticRegression(class_weight='balanced', penalty='l1',
-                           C=0.1, solver='liblinear')
-oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=None, folds=repeated_folds, model_type='sklearn', model=model)
+#model = LogisticRegression(class_weight='balanced', penalty='l1',
+#                           C=0.1, solver='liblinear')
+#oof_lr, prediction_lr_repeated, scores = train_model(X_train, X_test, y_train, params=None, folds=repeated_folds, model_type='sklearn', model=model)
 
 # 3) CatBoost
 cat_params = {'learning_rate': 0.02,
@@ -133,8 +134,21 @@ fp.write(result)
 fp.close()
 
 #Number of features which are important for the model
-print((model.coef_ != 0).sum())
+#print((model.coef_ != 0).sum())
 
 # Analysis of best features
 top_features = [i[1:] for i in eli5.formatters.as_dataframe.explain_weights_df(model).feature if 'BIAS' not in i]
 print(top_features)
+X_train = train[top_features]
+X_test = test[top_features]
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+model = LogisticRegression(class_weight='balanced', penalty='l1', C=0.1, solver='liblinear')
+oof_lr1, prediction_lr1, _ = train_model(X_train, X_test, y_train, params=None, model_type='sklearn', model=model)
+
+# Shap
+explainer = shap.LinearExplainer(model, X_train)
+shap_values = explainer.shap_values(X_train)
+
+shap.summary_plot(shap_values, X_train)
