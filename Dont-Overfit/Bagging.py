@@ -2,10 +2,15 @@
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
+import eli5
+from eli5.sklearn import PermutationImportance
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.ensemble import BaggingClassifier
 from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
 # Get data
 train = pd.read_csv("train.csv", low_memory=False)
@@ -30,20 +35,40 @@ def modelAnalysis(predVal, actualVal):
 
 
 ## MODELS
-# Random Forest Classifier(Bagging)
-RFC = RandomForestClassifier(max_depth=2)
-RFC.fit(X_train, y_train)
-y_pred = RFC.predict(X_val)
-modelAnalysis(y_pred, y_val)
+def analyse_model(X_train, X_val, y_train, y_val, model="RFC",
+                  feature_importance=False):
 
-# Bagging Classifier(Bagging)
-bagModel = BaggingClassifier()
-bagModel.fit(X_train, y_train)
-y_pred = bagModel.predict(X_val)
-modelAnalysis(y_pred, X_val)
+    if model == "RFC":
+        m = RandomForestClassifier(max_depth=2)
+    elif model == "BagModel":
+        m = BaggingClassifier()
+    elif model == "AdaBoost":
+        m = AdaBoostClassifier()
+    elif model == "GradBoost":
+        m = GradientBoostingClassifier()
+    elif model == "LDA":
+        m = LinearDiscriminantAnalysis()
+    elif model == "QDA":
+        m = QuadraticDiscriminantAnalysis()
 
-# AdaBoost Classifier (Boosting)
-AdaBoost = AdaBoostClassifier()
-AdaBoost.fit(X_train, y_train)
-y_pred = AdaBoost.predict(X_val)
-modelAnalysis(y_pred, y_val)
+    m.fit(X_train, y_train)
+    y_pred = m.predict(X_val)
+    print(model + " performance: ")
+    modelAnalysis(y_pred, y_val)
+
+    if feature_importance:
+        perm = PermutationImportance(m, random_state=1).fit(X_val, y_val)
+        eli5.show_weights(perm, feature_names=X_val.columns.tolist(), top=50)
+
+
+# Bagging models
+analyse_model(X_train, X_val, y_train, y_val, model="RFC", feature_importance=True)
+analyse_model(X_train, X_val, y_train, y_val, model="BagModel", feature_importance=False)
+
+# Boosting models
+# Additional models to analyse: Light GBM, CatBoost, XGBM
+analyse_model(X_train, X_val, y_train, y_val, model="AdaBoost", feature_importance=False)
+analyse_model(X_train, X_val, y_train, y_val, model="GradBoost", feature_importance=True)
+analyse_model(X_train, X_val, y_train, y_val, model="LDA", feature_importance=False)
+analyse_model(X_train, X_val, y_train, y_val, model="QDA", feature_importance=False)
+
